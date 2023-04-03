@@ -18,7 +18,6 @@ area_stack2 = "4300"
 area_stack3 = "2800"
 area_stack4 = "2800"
 quantity = "2"
-#SID = "0rlsfi3r1sbr9ran6b1fmjn1br"
 SID = ""
 
 options = webdriver.ChromeOptions()
