@@ -100,7 +100,6 @@ def date():
     return is_find
 
 def select_area():
-    is_need_refresh = False
     is_success = False
     area_list = None
     area_list_count = 0
@@ -113,14 +112,14 @@ def select_area():
         if area_list is not None:
             area_list_count = len(area_list)
             if area_list_count == 0:
-                is_need_refresh = True
+                is_success = False
         else:
-            is_need_refresh = True
+            is_success = False
     if area_list_count > 0:
         area_stack_list = [area_stack1, area_stack2, area_stack3, area_stack4]
         for i in range(0,4):
             for row in area_list:
-                row_is_enabled=False
+                row_is_enabled = False
                 row_is_enabled = row.is_enabled()
                 row_text = ""        
                 if row_is_enabled:
@@ -131,15 +130,10 @@ def select_area():
                     row_text = format_keyword_string(row_text)        
                     if area_stack_list[i] in row_text:
                         driver.execute_script("arguments[0].click();", row)
-                        time.sleep(0.1)
                         is_success = True
                         break
-                    if is_success:
-                        break
-        if not is_success:
-            is_need_refresh = True                    
-    if is_need_refresh:
-        driver.refresh()
+            if is_success:
+                break
     return is_success
 
 def ocr_answer():
