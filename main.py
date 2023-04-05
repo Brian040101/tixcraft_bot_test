@@ -12,12 +12,12 @@ import ddddocr
 import time
 
 url = "https://tixcraft.com/"
-date_select = '2023/04/24'
-area_stack1 = "3800"
-area_stack2 = "4300"
-area_stack3 = "2800"
-area_stack4 = "2800"
-quantity = "2"
+date_select = '2023/05/14'
+area_stack1 = "none"
+area_stack2 = "none"
+area_stack3 = "none"
+area_stack4 = "看台區"
+quantity = "1"
 SID = ""
 
 options = webdriver.ChromeOptions()
@@ -28,7 +28,8 @@ options.add_argument('ignore-certificate-errors')
 driver = webdriver.Chrome(options=options)
 
 ocr = ddddocr.DdddOcr()
-success_order = False
+
+session = 0
 
 def format_keyword_string(keyword):
     if not keyword is None:
@@ -58,7 +59,6 @@ def redirect(driver, url):
         game_name = url_split[5]
     if "/activity/detail/%s" % (game_name,) in url:        
         entry_url = url.replace("/activity/detail/","/activity/game/")
-        print("redirect to new url:", entry_url)
         driver.get(entry_url)
         ret = True 
     return ret
@@ -68,7 +68,6 @@ def date():
         EC.presence_of_element_located((By.CSS_SELECTOR, '#gameList > table > tbody'))
     )
     area_list = table.find_elements(By.CSS_SELECTOR, 'tr')
-    matched_rows = []
     is_find = False
     if area_list is not None:
         area_list_count = len(area_list)
@@ -80,10 +79,10 @@ def date():
                 row_content.append(row.text)
             row_str = "".join(row_content)
             if date_select in row_str:
-                matched_rows.append(row_content)
                 button_scan = f'tr:nth-child({i}) > td:nth-child(4) > button'
                 button_available = table.find_element(By.CSS_SELECTOR, button_scan)  
                 driver.execute_script("arguments[0].click();", button_available)
+                time.sleep(0.1)
                 is_find = True
                 """     
                 button_html = button_available.get_attribute('outerHTML')
@@ -101,27 +100,46 @@ def date():
     return is_find
 
 def select_area():
+    is_need_refresh = False
     is_success = False
-    area_stack_list = [area_stack1, area_stack2, area_stack3, area_stack4]   
-    try:
-        table = WebDriverWait(driver, 0.5).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, '.zone'))
-        )
-        area_list = table.find_elements(By.TAG_NAME, 'a')
-        for row in area_list:
-            row_text = row.text.strip()
-            row_text = format_keyword_string(row_text)           
-            if any(area_stack in row_text for area_stack in area_stack_list):
-                print("area stack: ", row_text)
-                driver.execute_script("arguments[0].click();", row)
-                is_success = True
-                break           
+    area_list = None
+    area_list_count = 0
+    table = WebDriverWait(driver, 1).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, '.zone'))
+    )
+    el = driver.find_element(By.CSS_SELECTOR, '.zone')   
+    if el is not None:
+        area_list = el.find_elements(By.TAG_NAME, 'a')
+        if area_list is not None:
+            area_list_count = len(area_list)
+            if area_list_count == 0:
+                is_need_refresh = True
+        else:
+            is_need_refresh = True
+    if area_list_count > 0:
+        area_stack_list = [area_stack1, area_stack2, area_stack3, area_stack4]
+        for i in range(0,4):
+            for row in area_list:
+                row_is_enabled=False
+                row_is_enabled = row.is_enabled()
+                row_text = ""        
+                if row_is_enabled:
+                    row_text = row.text
+                if row_text is None:
+                    row_text = ""
+                if len(row_text) > 0:
+                    row_text = format_keyword_string(row_text)        
+                    if area_stack_list[i] in row_text:
+                        driver.execute_script("arguments[0].click();", row)
+                        time.sleep(0.1)
+                        is_success = True
+                        break
+                    if is_success:
+                        break
         if not is_success:
-            print("No area found, refreshing page...")
-            driver.refresh()           
-    except TimeoutException:
-        print("Timed out waiting for table to load, refreshing page...")
-        driver.refresh()      
+            is_need_refresh = True                    
+    if is_need_refresh:
+        driver.refresh()
     return is_success
 
 def ocr_answer():
@@ -150,18 +168,18 @@ def check_ocr(answer):
     if not len(answer) == 4:
         image = driver.find_element(By.ID,'TicketForm_verifyCode-image')
         driver.execute_script("arguments[0].click();", image)
-        time.sleep(0.1)
+        #time.sleep(0.1)
         is_wrong = True
     return is_wrong
 
 def check_and_quantity():
     form_select = None
     is_ticket_number_assigned = False    
-    table = WebDriverWait(driver, 0.5).until(
-        EC.presence_of_element_located((By.CLASS_NAME, 'container'))
+    table = WebDriverWait(driver, 1).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, '#form-ticket-ticket'))
     )
     form_select = driver.find_element(By.CSS_SELECTOR, '.mobile-select')
-    form_checkbox = driver.find_element(By.ID, 'TicketForm_agree')
+    form_checkbox = driver.find_element(By.CSS_SELECTOR, '#TicketForm_agree')
     is_finish_checkbox_click = False
     select_obj = None
     if form_select is not None:
@@ -189,57 +207,90 @@ def fillin_ocr(answer):
 
 def thread1():
     global url
-    global success_order  
     while True:
-        while True:
-            if '/activity/detail/' in url:
-                is_redirected = redirect(driver, url)
-                if is_redirected:             
-                    break          
-        while True:
-            if '/activity/game/' in url:
-                is_find = date()        
-                if is_find == True:               
-                    break
-                else:
-                    driver.refresh()    
-        while True:
-            if '/ticket/area/' in url:
-                success = select_area()
-                if success:                
-                    break
-        while True:
-            success_order = False
-            if '/ticket/ticket/' in url:
+        match(session):            
+            case(1):
                 while True:
-                    quan_ok,check_ok = check_and_quantity()
-                    if quan_ok and check_ok:
-                        break
-                for redo_ocr in range(999):
-                    code = ocr_answer()
-                    if code is not None:
-                        wrong = check_ocr(code)
-                    if not wrong:                    
-                        break                              
-                fillin_ocr(code)
-                time.sleep(0.1)
-                if not success_order:
-                    continue
-                else: 
-                    break
-
+                    if '/activity/detail/' in url:
+                        try:
+                            is_redirected = redirect(driver, url)
+                        except Exception as exc:
+                            pass
+                        if is_redirected or session != 1:             
+                            break
+            case(2):                    
+                while True:
+                    if '/activity/game/' in url:
+                        try:
+                            is_find = date()
+                        except Exception as exc:
+                            pass                                                 
+                        if is_find == True or session != 2:               
+                            break
+                        else:
+                            driver.refresh()   
+            case(3):        
+                while True:
+                    suc = False
+                    if '/ticket/area/' in url:                        
+                        try:
+                            suc = select_area()
+                        except Exception as exc:
+                            pass
+                        if suc == True or session != 3:
+                                                                     
+                            break
+            case(4):        
+                while True:
+                    if '/ticket/ticket/' in url:
+                        while True:
+                            try:
+                                quan_ok,check_ok = check_and_quantity()
+                            except Exception as exc:
+                                pass
+                            if quan_ok and check_ok:
+                                break   
+                        for redo_ocr in range(999):
+                            try:
+                                code = ocr_answer()
+                            except Exception as exc:
+                                pass
+                            if code is not None:
+                                try:
+                                    wrong = check_ocr(code)
+                                except Exception as exc:
+                                    pass
+                            if not wrong:                    
+                                break
+                        try:                                                         
+                            fillin_ocr(code)
+                        except Exception as exc:
+                            pass
+                        time.sleep(0.1)
+                        if session == 4:
+                            continue
+                        else: 
+                            break
+            
 def thread2():
     global url
-    global success_order
+    global session
     while True:
         try:
             url = driver.current_url
-            if not '/ticket/ticket/' in url:
-                success_order = True
-        except UnexpectedAlertPresentException:
+            if '/activity/detail/' in url:
+                session = 1
+            elif '/activity/game/' in url:
+                session = 2
+            elif '/ticket/area/' in url:
+                session = 3
+            elif '/ticket/ticket/' in url:
+                session = 4
+            else:
+                session = 0
+        except UnexpectedAlertPresentException:            
             pass
-        time.sleep(0.1)
-                     
+                                      
 t1 = threading.Thread(target=thread1)
 t2 = threading.Thread(target=thread2)
 launchBrowser()
