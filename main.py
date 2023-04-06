@@ -232,8 +232,11 @@ def thread1():
                         except Exception as exc:
                             pass
                         if suc == True or session != 3:
-                                                                     
+                            time.sleep(0.1)                              
                             break
+                        else:
+                            driver.refresh()
+                        
             case(4):        
                 while True:
                     if '/ticket/ticket/' in url:
